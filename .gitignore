@@ -1,0 +1,28 @@
+# Local environments
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+dist/
+build/
+
+# Generated solver output (recreate locally with solve.py)
+solutions/
+figures/
+solutions.zip
+
+# I am keeping plotting local for now. We can add it later if we want.
+visualize.py
+
+# Editor / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

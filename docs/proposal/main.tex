@@ -1,0 +1,91 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{setspace}
+\usepackage{url}
+\onehalfspacing
+
+\title{Project Idea: CG:SHOP 2027 Lawn Mowing}
+\author{Hoang Ho, Kristina Liao, Oscar Martinez Wittinghan\\
+COT 6405: Design and Analysis of Algorithms, Fall 2026}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{Problem statement}
+
+This is the official CG:SHOP 2027 problem [1].
+
+For a given polygonal region $P$, the Lawn Mowing Problem asks for a
+shortest tour $T$ that gets within Euclidean distance $1/2$ of every
+point in $P$. That is the same as a shortest tour for a unit-diameter
+cutter $C$ that covers all of $P$. The problem is NP-hard [2].
+CG:SHOP 2027 restricts instances to polyominoes. The cutter is a
+smaller polyomino and moves in an axis-parallel fashion [1].
+
+An instance gives a region to cover (a polyomino, possibly with holes),
+a cutter shape, a cutter center, and an integer $k =$
+\texttt{number\_of\_cutters}.
+
+A solution is exactly $k$ tours, one per cutter.
+Each tour lists the points the cutter's center passes through.
+The tour is closed implicitly: the cutter goes from the last point back
+to the first one.
+Consecutive points must be axis-parallel.
+A point may be visited again later, but not immediately again.
+A tour of a single point is a cutter that stays where it is.
+Cutters do not interfere with each other and may leave the region.
+Together they must sweep the whole region.
+
+The objective is $\mathrm{max\_tour\_length}$, the length of the
+longest tour. We want to minimize it.
+
+We will use the official checker from
+\url{https://github.com/CG-SHOP/pyutils27} [3].
+A solution counts only if that checker reports no errors.
+
+\section{Goals}
+
+We want work we can finish this semester, and still have enough for a
+conference-style talk.
+
+\begin{enumerate}
+\item Implement more than one algorithm that produces feasible
+      solutions (the official checker accepts them).
+\item Run those algorithms on the published example instances, and on
+      the challenge instances if they come out in time.
+\item Compare them: $\mathrm{max\_tour\_length}$, runtime, and plots.
+\item Give a talk with the problem, the algorithms, the plots, and
+      what did not work.
+\end{enumerate}
+
+We are not trying to prove optimality, and we are not promising to win
+the contest.
+
+\section{Team and expected contributions}
+
+\textbf{Hoang Ho, Kristina Liao, Oscar Martinez Wittinghan.}
+
+We will share the coding, the experiments, and the writeup.
+Who owns which algorithm is not fixed yet.
+Everyone is expected to implement or test part of the solver, help
+with the plots, and take part in the final talk.
+
+\section{References}
+
+\begin{enumerate}
+\item S\'{a}ndor Fekete, Phillip Keldenich, and Stefan Schirra.
+CG:SHOP 2027 Challenge.
+\url{https://cgshop.ibr.cs.tu-bs.de/competition/cg-shop-2027/}.
+
+\item Esther M. Arkin, S\'{a}ndor P. Fekete, and Joseph S. B. Mitchell.
+Approximation algorithms for lawn mowing and milling.
+{\em Computational Geometry}, 17(1--2):25--50, 2000.
+
+\item CG:SHOP.
+pyutils27.
+\url{https://github.com/CG-SHOP/pyutils27}.
+\end{enumerate}
+
+\end{document}
