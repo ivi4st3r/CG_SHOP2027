@@ -50,12 +50,15 @@ def _cycle_range(points: list[tuple[int, int]], prefix: list[int], i: int, j: in
 
 
 def _open_row_cover(
-    rows: dict[int, list[int]], offsets: list[tuple[int, int]]
+    rows: dict[int, list[int]],
+    offsets: list[tuple[int, int]],
+    reverse: bool = False,
+    flip: bool = False,
 ) -> list[tuple[int, int]]:
     corners: list[tuple[int, int]] = []
-    for index, y in enumerate(sorted(rows)):
+    for index, y in enumerate(sorted(rows, reverse=reverse)):
         sweep = _row_sweep(sorted(rows[y]), y, offsets)
-        if index % 2 == 1:
+        if (index % 2 == 1) != flip:
             sweep = list(reversed(sweep))
         if corners and sweep:
             corners.extend(_manhattan_connect(corners[-1], sweep[0]))
@@ -64,15 +67,18 @@ def _open_row_cover(
 
 
 def _open_col_cover(
-    cols: dict[int, list[int]], offsets: list[tuple[int, int]]
+    cols: dict[int, list[int]],
+    offsets: list[tuple[int, int]],
+    reverse: bool = False,
+    flip: bool = False,
 ) -> list[tuple[int, int]]:
     """Same zigzag, but along columns. Built by swapping x/y."""
     swapped = [(dy, dx) for dx, dy in offsets]
     corners: list[tuple[int, int]] = []
-    for index, x in enumerate(sorted(cols)):
+    for index, x in enumerate(sorted(cols, reverse=reverse)):
         sweep_swapped = _row_sweep(sorted(cols[x]), x, swapped)
         sweep = [(cy, cx) for cx, cy in sweep_swapped]
-        if index % 2 == 1:
+        if (index % 2 == 1) != flip:
             sweep = list(reversed(sweep))
         if corners and sweep:
             corners.extend(_manhattan_connect(corners[-1], sweep[0]))
@@ -159,7 +165,60 @@ def _split_minmax(
         return [points]
     while len(pieces) < k:
         pieces.append([pieces[-1][-1]])
-    return pieces[:k]
+    return _nudge_cuts(pieces[:k])
+
+
+def _nudge_cuts(
+    pieces: list[list[tuple[int, int]]],
+) -> list[list[tuple[int, int]]]:
+    """Move a cut by one vertex if that lowers the longer of the two tours."""
+    pieces = [list(p) for p in pieces]
+    changed = True
+    while changed:
+        changed = False
+        for i in range(len(pieces) - 1):
+            left, right = pieces[i], pieces[i + 1]
+            current = max(_cycle_length(left), _cycle_length(right))
+
+            if len(left) >= 3:
+                new_left = left[:-1]
+                new_right = [left[-2]] + right
+                if new_right[0] == new_right[1]:
+                    new_right = new_right[1:]
+                if (
+                    new_left
+                    and new_right
+                    and max(_cycle_length(new_left), _cycle_length(new_right)) < current
+                ):
+                    pieces[i], pieces[i + 1] = new_left, new_right
+                    changed = True
+                    continue
+
+            if len(right) >= 3:
+                new_left = left + [right[1]]
+                new_right = right[1:]
+                if new_left[-1] == new_left[-2]:
+                    new_left = new_left[:-1]
+                if (
+                    new_left
+                    and new_right
+                    and max(_cycle_length(new_left), _cycle_length(new_right)) < current
+                ):
+                    pieces[i], pieces[i + 1] = new_left, new_right
+                    changed = True
+    return pieces
+
+
+def _rotated(points: list[tuple[int, int]], start: int) -> list[tuple[int, int]]:
+    """Open the covering at another vertex (treat the path plus return as a cycle)."""
+    if start <= 0 or start >= len(points) - 1:
+        return points
+    wrapped = (
+        points[start:]
+        + _manhattan_connect(points[-1], points[0])
+        + points[: start + 1]
+    )
+    return _remove_immediate_repeats(wrapped)
 
 
 def _best_covering(
@@ -169,12 +228,38 @@ def _best_covering(
     k: int,
 ) -> tuple[list[list[tuple[int, int]]], str]:
     candidates: list[tuple[str, list[tuple[int, int]]]] = []
-    row_cover = _open_row_cover(rows, offsets)
-    if row_cover:
-        candidates.append(("row-cover", row_cover))
-    col_cover = _open_col_cover(cols, offsets)
-    if col_cover:
-        candidates.append(("col-cover", col_cover))
+    for reverse in (False, True):
+        for flip in (False, True):
+            row_cover = _open_row_cover(rows, offsets, reverse=reverse, flip=flip)
+            if row_cover:
+                tag = f"row-r{int(reverse)}-f{int(flip)}"
+                candidates.append((tag, row_cover))
+                candidates.append((tag + "-rev", list(reversed(row_cover))))
+            col_cover = _open_col_cover(cols, offsets, reverse=reverse, flip=flip)
+            if col_cover:
+                tag = f"col-r{int(reverse)}-f{int(flip)}"
+                candidates.append((tag, col_cover))
+                candidates.append((tag + "-rev", list(reversed(col_cover))))
+
+    seen: set[tuple[tuple[int, int], ...]] = set()
+    unique: list[tuple[str, list[tuple[int, int]]]] = []
+    for name, cover in candidates:
+        key = tuple(cover)
+        if len(cover) >= 2 and key not in seen:
+            seen.add(key)
+            unique.append((name, cover))
+    candidates = unique
+
+    extra: list[tuple[str, list[tuple[int, int]]]] = []
+    for name, cover in candidates:
+        n = len(cover)
+        if n < 4:
+            continue
+        steps = min(6, n)
+        for s in range(1, steps):
+            start = (s * n) // steps
+            extra.append((f"{name}-rot{start}", _rotated(cover, start)))
+    candidates.extend(extra)
 
     best_pieces: list[list[tuple[int, int]]] | None = None
     best_name = "row-cover"
@@ -193,8 +278,9 @@ def _best_covering(
 
 def solve_instance(instance: CGSHOP2027Instance) -> CGSHOP2027Solution:
     """
-    Build one covering path (row sweep and column sweep), split it into
-    k tours, and keep the split whose longest closed tour is shorter.
+    Try several zigzag coverings (row/column, both ends, both first-pass
+    directions), split each to balance closed-tour length, nudge the cuts,
+    and keep the best.
     """
     region = rasterize(instance.region_to_cover)
     _, offsets = _cutter_offsets(instance)
