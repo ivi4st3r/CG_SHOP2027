@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""Run the CG:SHOP 2027 solver on instances and write solutions."""
+"""Run a CG:SHOP 2027 solver on instances and write solutions."""
 
 from __future__ import annotations
 
 import argparse
+import importlib
+import pkgutil
 import sys
 from pathlib import Path
 
@@ -11,7 +13,38 @@ from cgshop2027_pyutils.instance_database import InstanceDatabase
 from cgshop2027_pyutils.io import read_instance
 from cgshop2027_pyutils.zip import ZipWriter
 
-from solver.coverage import solve_instance, verify_solution
+from solver.coverage import verify_solution as default_verify
+import solver as solver_pkg
+
+
+def _solver_names() -> list[str]:
+    names: list[str] = []
+    for info in pkgutil.iter_modules(solver_pkg.__path__):
+        if not info.name.startswith("_"):
+            names.append(info.name)
+    return sorted(names)
+
+
+def _load_solver(name: str):
+    try:
+        module = importlib.import_module(f"solver.{name}")
+    except ModuleNotFoundError:
+        available = ", ".join(_solver_names()) or "(none)"
+        print(
+            f"No solver/{name}.py. Available: {available}.\n"
+            f"Add solver/{name}.py with a solve_instance(instance) function.",
+            file=sys.stderr,
+        )
+        raise SystemExit(2) from None
+    solve_fn = getattr(module, "solve_instance", None)
+    if solve_fn is None:
+        print(
+            f"solver/{name}.py needs a solve_instance(instance) function.",
+            file=sys.stderr,
+        )
+        raise SystemExit(2)
+    verify_fn = getattr(module, "verify_solution", default_verify)
+    return solve_fn, verify_fn
 
 
 def _parse_args() -> argparse.Namespace:
@@ -42,6 +75,15 @@ def _parse_args() -> argparse.Namespace:
         default=None,
         help="Solve at most this many instances (for quick tests).",
     )
+    parser.add_argument(
+        "--algo",
+        default="coverage",
+        help=(
+            "Solver module under solver/ (filename without .py). "
+            "Examples: coverage, minmax, sweep, cluster. "
+            f"Found now: {', '.join(_solver_names()) or 'none'}."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -56,6 +98,7 @@ def _iter_instances(path: Path):
 
 def main() -> int:
     args = _parse_args()
+    solve_fn, verify_fn = _load_solver(args.algo)
     args.output.mkdir(parents=True, exist_ok=True)
 
     solved = 0
@@ -65,8 +108,8 @@ def main() -> int:
     for instance in _iter_instances(args.instances):
         if args.limit is not None and solved + failed >= args.limit:
             break
-        solution = solve_instance(instance)
-        errors = verify_solution(instance, solution)
+        solution = solve_fn(instance)
+        errors = verify_fn(instance, solution)
         out_path = args.output / f"{instance.instance_uid}.solution.json"
         out_path.write_text(solution.model_dump_json(indent=2) + "\n", encoding="utf-8")
         zip_solutions.append(solution)
